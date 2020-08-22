@@ -1,3 +1,5 @@
+import json
+
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
@@ -19,7 +21,7 @@ class ChildTrader:
 
         for main_account_order in main_account_orders:
             for account_name, child_account in config.child_accounts.items():
-                child_account_order = self.child_account_repository.get_child_account_active_trade_by_parent_id(main_account_order['id_main_account_order_history'], account_name)
+                child_account_order = self.child_account_repository.get_child_account_active_trade_by_parent_id(main_account_order['id_main_account_spot_order_history'], account_name)
 
                 if child_account_order is not None:
                     continue
@@ -44,7 +46,10 @@ class ChildTrader:
                 self.child_account_entity_manager.insert_new_trade(order, main_account_order, account_name)
 
         except Exception as e:
-            print('Child place order exception: ' + str(e))
+            f = open("exception.txt", "a")
+            f.write('Child place order exception: ' + str(e) + "\n")
+            f.write(json.dumps(main_account_order) + "\n")
+            f.close()
         finally:
             self.child_account_entity_manager.mark_parent_market_trade_as_processed(main_account_order)
 
@@ -99,8 +104,11 @@ class ChildTrader:
                 type=main_account_order['type'],
             )
         except BinanceAPIException as e:
-            print('Child place order exception: ' + str(e))
-            print('Type: ' + str(main_account_order['type']) + '; Main order id: ' + str(main_account_order['id_main_account_order_history']))
+            f = open("exception.txt", "a")
+            f.write('Child place order exception: ' + str(e) + "\n")
+            f.write('Type: ' + str(main_account_order['type']) + '; Main order id: ' + str(main_account_order['id_main_account_spot_order_history']) + "\n")
+            f.write(json.dumps(main_account_order) + "\n")
+            f.close()
 
         return order
 
