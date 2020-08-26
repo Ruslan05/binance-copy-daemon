@@ -21,7 +21,7 @@ class ChildTrader:
 
         for main_account_order in main_account_orders:
             for account_name, child_account in config.child_accounts.items():
-                child_account_order = self.child_account_repository.get_child_account_active_trade_by_parent_id(main_account_order['id_main_account_spot_order_history'], account_name)
+                child_account_order = self.child_account_repository.get_child_account_active_trade_by_parent_id(main_account_order['id_main_account_order_history'], account_name)
 
                 if child_account_order is not None:
                     continue
@@ -54,20 +54,17 @@ class ChildTrader:
             self.child_account_entity_manager.mark_parent_market_trade_as_processed(main_account_order)
 
     def _place_limit_order(self, client, main_account_order):
-        calculated_qty = self._get_calculated_limit_order_qty_based_on_deposit(client, main_account_order)
-        order = None
+        calculated_limit_order_data = self._get_calculated_limit_order_data_based_on_deposit(client, main_account_order)
 
-        if main_account_order['side'] == config.BUY:
-            order = client.order_limit_buy(
-                symbol=main_account_order['symbol'],
-                quantity=calculated_qty,
-                price=main_account_order['price'])
+        order = client.create_margin_order(
+            symbol=main_account_order['symbol'],
+            side=main_account_order['side'],
+            type=main_account_order['type'],
+            timeInForce=main_account_order['time_in_force'],
+            quantity=calculated_limit_order_data['calculated_qty'],
+            price=main_account_order['price'])
 
-        if main_account_order['side'] == config.SELL:
-            order = client.order_limit_sell(
-                symbol=main_account_order['symbol'],
-                quantity=calculated_qty,
-                price=main_account_order['price'])
+        order['borrowed'] = calculated_limit_order_data['borrowed_resource_amount']
 
         return order
 
@@ -90,7 +87,7 @@ class ChildTrader:
         return order
 
     def _place_stop_loss_limit_order(self, client, main_account_order):
-        calculated_qty = self._get_calculated_limit_order_qty_based_on_deposit(client, main_account_order)
+        calculated_qty = self._get_calculated_limit_order_data_based_on_deposit(client, main_account_order)['calculated_qty']
         order = None
 
         try:
@@ -106,22 +103,25 @@ class ChildTrader:
         except BinanceAPIException as e:
             f = open("exception.txt", "a")
             f.write('Child place order exception: ' + str(e) + "\n")
-            f.write('Type: ' + str(main_account_order['type']) + '; Main order id: ' + str(main_account_order['id_main_account_spot_order_history']) + "\n")
+            f.write('Type: ' + str(main_account_order['type']) + '; Main order id: ' + str(main_account_order['id_main_account_order_history']) + "\n")
             f.write(json.dumps(main_account_order) + "\n")
             f.close()
 
         return order
 
-    # TODO: discuss precision
-    def _get_calculated_limit_order_qty_based_on_deposit(self, client, main_account_order):
+    # Don`t have borrowed amount with order data. So, multiple active orders will work wrong
+    def _get_calculated_limit_order_data_based_on_deposit(self, client, main_account_order):
         main_account_client = Client(config.main_account_api_key, config.main_account_api_secret)
+
         currency = self._get_currency_from_main_order(main_account_order)
-        child_account_balance_free = float(client.get_asset_balance(asset=currency)['free'])
 
-        if child_account_balance_free == 0 or currency == '':
+        main_account_balance = self._get_account_balance(main_account_client, currency)
+        main_order_borrowed_percentage = self._get_main_account_borrowed_percentage(main_account_client, currency, main_account_order)
+
+        child_account_balance_free = float(self._get_account_balance(client, currency)['free'])
+
+        if child_account_balance_free is None or child_account_balance_free == 0 or currency == '':
             return 0
-
-        main_account_balance = main_account_client.get_asset_balance(asset=currency)
 
         if main_account_order['side'] == config.SELL:
             # Calculate the percentage of created order in main account relatively to the main account balance.
@@ -137,11 +137,15 @@ class ChildTrader:
             # Calculate the percentage of created order in main account relatively to the main account balance.
             main_account_locked_on_trade = main_account_order['price'] * main_account_order['original_qty']
             main_order_percentage = (float(main_account_locked_on_trade) / (float(main_account_balance['free']) + float(main_account_locked_on_trade))) * 100
-            # Sum which is calculated to spend for child account.
-            child_account_order_resource = child_account_balance_free * (main_order_percentage / 100)
+
+            child_amount_to_borrow = self._get_amount_to_borrow_in_child_account(client, currency, main_order_borrowed_percentage)
+            client.create_margin_loan(asset=currency, amount=child_amount_to_borrow)
+
+            # Sum which is calculated to spend for child account purchase.
+            child_account_order_resource = (child_account_balance_free + child_amount_to_borrow) * (main_order_percentage / 100)
             calculated_qty_to_buy = child_account_order_resource / float(main_account_order['price'])
 
-            return round(calculated_qty_to_buy - config.SAFE_ROUND_DOWN_HACK, config.PRECISION)
+            return {'calculated_qty': round(calculated_qty_to_buy - config.SAFE_ROUND_DOWN_HACK, config.PRECISION), 'borrowed_resource_amount': child_amount_to_borrow}
 
         return 0
 
@@ -178,6 +182,29 @@ class ChildTrader:
 
         return 0
 
+    def _get_amount_to_borrow_in_child_account(self, client, currency, main_order_borrowed_percentage):
+        child_loan_max = float(client.get_max_margin_loan(asset=currency)['amount'])
+
+        return child_loan_max * (main_order_borrowed_percentage / 100)
+
+    def _get_main_account_borrowed_percentage(self, main_account_client, currency, main_account_order):
+        main_account_borrowed_amount = float(main_account_order['borrowed'])
+        main_account_available_amount_to_borrow = self._get_main_account_available_amount_to_borrow(main_account_client, currency)
+
+        return (main_account_borrowed_amount / (main_account_borrowed_amount + main_account_available_amount_to_borrow)) * 100
+
+    def _get_main_account_available_amount_to_borrow(self, main_account_client, currency):
+        return float(main_account_client.get_max_margin_loan(asset=currency)['amount'])
+
+    def _get_account_balance(self, client, currency):
+        account_assets_info = client.get_margin_account()
+
+        for asset_info in account_assets_info['userAssets']:
+            if asset_info['asset'] == currency:
+                return asset_info
+
+        return None
+
     def _get_currency_from_main_order(self, main_account_order):
         length = len(main_account_order['symbol'])
         limit = 3
@@ -201,9 +228,12 @@ class ChildTrader:
             api_secret = config.child_accounts[child_account_order['account_name']]['api_secret']
 
             client = Client(api_key, api_secret)
-            client.cancel_order(
+            currency = self._get_currency_from_main_order(child_account_order)
+
+            client.cancel_margin_order(
                 symbol=child_account_order['symbol'],
                 orderId=child_account_order['order_id']
             )
+            client.repay_margin_loan(asset=currency, amount=child_account_order['borrowed'])
 
             self.child_account_entity_manager.close_child_trade_in_db(child_account_order, child_account_order['account_name'])
