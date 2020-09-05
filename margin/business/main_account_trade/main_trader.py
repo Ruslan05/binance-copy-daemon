@@ -19,6 +19,7 @@ class MainTrader:
         for allowed_symbol in config.ALLOWED_SYMBOLS:
             print(allowed_symbol)
             active_trades = self.client.get_open_margin_orders(symbol=allowed_symbol)
+            active_trades = self.client.transfer_spot_to_margin(symbol=allowed_symbol)
 
             for active_trade in active_trades:
                 records = self.main_account_repository.get_main_account_trade_by_id(active_trade)
@@ -64,11 +65,14 @@ class MainTrader:
         active_trades_with_borrowing = self.main_account_repository.get_main_account_active_trade_with_borrowing()
         main_account_balance = self._get_main_account_margin_wallet(currency)
         borrowed = float(main_account_balance['borrowed'])
+        active_trade['borrowed'] = 0
 
         for active_trade_with_borrowing in active_trades_with_borrowing:
             borrowed = borrowed - float(active_trade_with_borrowing['borrowed'])
 
-        active_trade['borrowed'] = borrowed
+        if float(main_account_balance['netAsset']) < float(main_account_balance['locked']):
+            borrowed = borrowed - float(main_account_balance['free'])
+            active_trade['borrowed'] = borrowed
 
         return active_trade
 
