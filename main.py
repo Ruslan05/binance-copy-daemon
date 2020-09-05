@@ -20,6 +20,7 @@ from margin.persistence.main_account_trade.main_account_repository import MainAc
 from margin.persistence.main_account_trade.main_account_entity_manager import MainAccountEntityManager as MarginMainAccountEntityManager
 from margin.business.main_account_trade.main_trader import MainTrader as MarginMainTrader
 
+from wallet.business.wallet_synchronizer import WalletSynchronizer
 
 class Main:
     def run(self):
@@ -36,12 +37,17 @@ class Main:
 
         margin_main_account = MarginMainTrader(MarginMainAccountRepository(db_connection), MarginMainAccountEntityManager(db_connection))
         margin_child_account = MarginChildTrader(MarginChildAccountRepository(db_connection), MarginChildAccountEntityManager(db_connection))
+
+        wallet_synchronizer = WalletSynchronizer()
+
         while True:
             # spot_main_account.sync_main_account_trades()
             # spot_child_account.sync_child_accounts_trades()
 
             margin_main_account.sync_main_account_trades()
             margin_child_account.sync_child_accounts_trades()
+
+            # wallet_synchronizer.sync_wallets()
 
 main = Main()
 main.run()

@@ -27,7 +27,13 @@ class AbstractChildAccountRepository:
     def _get_main_account_active_trades(self):
         cursor = self.db.cursor(dictionary=True)
 
-        query = "SELECT * FROM " + self.main_account_order_history_table_name + " WHERE (status = '" + config.NEW_STATUS + "' OR (status = '" + config.EXECUTED_STATUS + "' AND type = '" + config.MARKET_TYPE + "' AND updated_at > '" + self.daemon_start_time + "') AND is_market_trade_cloned IS NULL)"
+        query = "SELECT maohtn.* FROM " + self.main_account_order_history_table_name + " maohtn " \
+                "LEFT JOIN " + self.child_account_order_history_table_name + " caohtn ON " \
+                " maohtn.id_main_account_order_history = caohtn.fk_main_account_order " \
+                " WHERE caohtn.id_child_account_order_history is NULL AND " \
+                " (maohtn.status = '" + config.NEW_STATUS + "' OR (maohtn.status = '" + config.EXECUTED_STATUS + "'"\
+                " AND maohtn.type = '" + config.MARKET_TYPE + "' AND maohtn.updated_at > '" + self.daemon_start_time + "')" \
+                " AND maohtn.is_market_trade_cloned IS NULL)"
         cursor.execute(query)
 
         return cursor.fetchall()

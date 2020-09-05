@@ -19,7 +19,6 @@ class MainTrader:
         for allowed_symbol in config.ALLOWED_SYMBOLS:
             print(allowed_symbol)
             active_trades = self.client.get_open_margin_orders(symbol=allowed_symbol)
-            active_trades = self.client.transfer_spot_to_margin(symbol=allowed_symbol)
 
             for active_trade in active_trades:
                 records = self.main_account_repository.get_main_account_trade_by_id(active_trade)
