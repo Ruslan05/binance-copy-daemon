@@ -22,3 +22,12 @@ class MainAccountRepository(AbstractMainAccountRepository):
         cursor.execute(query)
 
         return cursor.fetchall()
+
+    def get_main_account_market_trade_with_borrowing(self):
+        cursor = self.db.cursor(dictionary=True)
+
+        query = "SELECT * FROM " + self.main_account_order_history_table_name + " WHERE borrowed > 0 AND " + \
+                "status='" + config.EXECUTED_STATUS + "' and is_market_trade_cloned = NULL"
+        cursor.execute(query)
+
+        return cursor.fetchall()

@@ -95,20 +95,13 @@ class ChildTrader:
         return order
 
     def _place_market_order(self, main_account_order):
-        calculated_qty = self._get_calculated_market_order_qty_based_on_deposit(self.child_account_client, main_account_order)
-        order = None
+        calculated_limit_order_data = self._get_calculated_market_order_qty_based_on_deposit(main_account_order)
 
-        if main_account_order['side'] == config.BUY:
-            order = self.child_account_client.order_market_buy(
-                symbol=main_account_order['symbol'],
-                quantity=calculated_qty
-            )
-
-        if main_account_order['side'] == config.SELL:
-            order = self.child_account_client.order_market_sell(
-                symbol=main_account_order['symbol'],
-                quantity=calculated_qty
-            )
+        order = self.child_account_client.create_margin_order(
+            symbol=main_account_order['symbol'],
+            side=main_account_order['side'],
+            type=main_account_order['type'],
+            quantity=calculated_limit_order_data['calculated_qty'])
 
         return order
 
@@ -149,13 +142,10 @@ class ChildTrader:
 
         if main_account_order['borrowed'] != 0:
             child_loan_max = float(self.child_account_client.get_max_margin_loan(asset=self.current_side_currency)['amount'])
-            main_order_percentage = (main_account_locked_on_trade / (
-                        float(self.main_account_balance['free']) + (main_order_net_resource) + self.main_loan_max +
-                        main_account_order['borrowed'])) * 100
+            main_order_percentage = (main_account_locked_on_trade / (float(self.main_account_balance['free']) + (main_order_net_resource) + self.main_loan_max + main_account_order['borrowed'])) * 100
         else:
             child_loan_max = 0
-            main_order_percentage = (main_account_locked_on_trade /
-                                     (float(self.main_account_balance['free']) + main_account_locked_on_trade)) * 100
+            main_order_percentage = (main_account_locked_on_trade / (float(self.main_account_balance['free']) + main_account_locked_on_trade)) * 100
 
         child_account_balance = self._get_account_balance(self.child_account_client, self.current_side_currency)
 
@@ -177,29 +167,81 @@ class ChildTrader:
 
         if main_account_order['borrowed'] != 0:
             child_loan_max = float(self.child_account_client.get_max_margin_loan(asset=self.current_side_currency)['amount'])
-            main_order_percentage = (float(main_account_locked_on_trade) /
-                (float(self.main_account_balance['free']) + main_order_net_resource + self.main_loan_max + main_account_order['borrowed'])) * 100
-            print('main_order_percentage: ' + str(main_order_percentage))
-            print('main_account_locked_on_trade ' + str(main_account_locked_on_trade))
-            print('self.main_account_balance[\'free\']: ' + str(self.main_account_balance['free']))
-            print('main_order_net_resource: ' + str(main_order_net_resource))
-            print('self.main_loan_max: ' + str(self.main_loan_max))
-            print('main_account_order[\'borrowed\']: ' + str(main_account_order['borrowed']))
+            main_order_percentage = (float(main_account_locked_on_trade) / (float(self.main_account_balance['free']) + main_order_net_resource + self.main_loan_max + main_account_order['borrowed'])) * 100
         else:
-            main_order_percentage = (float(main_account_locked_on_trade) /
-                                     (float(self.main_account_balance['free']) + main_account_locked_on_trade)) * 100
+            main_order_percentage = (float(main_account_locked_on_trade) / (float(self.main_account_balance['free']) + main_account_locked_on_trade)) * 100
             child_loan_max = 0
 
         child_account_balance = self._get_account_balance(self.child_account_client, self.current_side_currency)
 
         child_account_order_resource = (float(child_account_balance['free']) + child_loan_max) * (main_order_percentage / 100)
-        print('child balance: ' + str(float(child_account_balance['free']) + child_loan_max))
         child_amount_to_borrow = self._get_child_amount_to_borrow(child_account_order_resource, child_account_balance)
 
         calculated_qty_to_buy = child_account_order_resource / float(main_account_order['price'])
-        print(calculated_qty_to_buy)
         calculated_qty_to_buy = round(calculated_qty_to_buy - config.SAFE_ROUND_DOWN_HACK, config.PRECISION)
-        print(calculated_qty_to_buy)
+
+        return {'calculated_qty': calculated_qty_to_buy, 'borrowed_resource_amount': child_amount_to_borrow}
+
+    # TODO: discuss precision
+    def _get_calculated_market_order_qty_based_on_deposit(self, main_account_order):
+        if main_account_order['side'] == config.SELL:
+            return self._get_sell_market_order_qty_data(main_account_order)
+
+        if main_account_order['side'] == config.BUY:
+            return self._get_buy_market_order_qty_data(main_account_order)
+
+        return {'calculated_qty': 0, 'borrowed_resource_amount': 0}
+
+    def _get_sell_market_order_qty_data(self, main_account_order):
+        child_account_balance = self._get_account_balance(self.child_account_client, self.current_side_currency)
+
+        # Calculate the percentage of created order in main account relatively to the main account balance.
+        main_account_locked_on_trade = main_account_order['original_qty']
+        main_order_net_resource = main_account_locked_on_trade - main_account_order['borrowed']
+
+        if main_order_net_resource < 0:
+            main_order_net_resource = 0
+
+        if main_account_order['borrowed'] != 0:
+            child_loan_max = float(self.child_account_client.get_max_margin_loan(asset=self.current_side_currency)['amount'])
+            main_order_percentage = (main_account_locked_on_trade / (float(self.main_account_balance['free']) + (main_order_net_resource) + self.main_loan_max + main_account_order['borrowed'])) * 100
+        else:
+            child_loan_max = 0
+            main_order_percentage = (main_account_locked_on_trade / (float(self.main_account_balance['free']) + main_account_locked_on_trade)) * 100
+
+        # Sum which is calculated to spend for child account.
+        child_account_order_resource = (float(child_account_balance['free']) + child_loan_max) * (main_order_percentage / 100)
+        child_amount_to_borrow = self._get_child_amount_to_borrow(child_account_order_resource, child_account_balance)
+
+        # Sum which is calculated to spend for child account.
+        calculated_qty_to_sell = child_account_order_resource
+        calculated_qty_to_sell = round(calculated_qty_to_sell - config.SAFE_ROUND_DOWN_HACK, config.PRECISION)
+
+        return {'calculated_qty': calculated_qty_to_sell, 'borrowed_resource_amount': child_amount_to_borrow}
+
+    def _get_buy_market_order_qty_data(self, main_account_order):
+        child_account_balance = self._get_account_balance(self.child_account_client, self.current_side_currency)
+
+        # Calculate the percentage of created order in main account relatively to the main account balance.
+        main_account_locked_on_trade = main_account_order['cummulative_quote_qty']
+        main_order_net_resource = main_account_locked_on_trade - main_account_order['borrowed']
+
+        if main_order_net_resource < 0:
+            main_order_net_resource = 0
+
+        if main_account_order['borrowed'] != 0:
+            child_loan_max = float(self.child_account_client.get_max_margin_loan(asset=self.current_side_currency)['amount'])
+            main_order_percentage = (float(main_account_locked_on_trade) / (float(self.main_account_balance['free']) + main_order_net_resource + self.main_loan_max + main_account_order['borrowed'])) * 100
+        else:
+            main_order_percentage = (float(main_account_locked_on_trade) / (float(self.main_account_balance['free']) + main_account_locked_on_trade)) * 100
+            child_loan_max = 0
+
+        child_account_order_resource = (float(child_account_balance['free']) + child_loan_max) * (main_order_percentage / 100)
+        child_amount_to_borrow = self._get_child_amount_to_borrow(child_account_order_resource, child_account_balance)
+
+        # Sum which is calculated to spend for child account.
+        calculated_qty_to_buy = child_account_order_resource / (main_account_order['cummulative_quote_qty'] / main_account_order['original_qty'])
+        calculated_qty_to_buy = round(calculated_qty_to_buy - config.SAFE_ROUND_DOWN_HACK, config.PRECISION)
 
         return {'calculated_qty': calculated_qty_to_buy, 'borrowed_resource_amount': child_amount_to_borrow}
 
@@ -212,39 +254,6 @@ class ChildTrader:
             child_amount_to_borrow = 0
 
         return child_amount_to_borrow
-
-    # TODO: discuss precision
-    def _get_calculated_market_order_qty_based_on_deposit(self, client, main_account_order):
-        main_account_client = Client(config.main_account_api_key, config.main_account_api_secret)
-        currency = self._get_currency_from_main_order(main_account_order)
-        child_account_balance_free = float(client.get_asset_balance(asset=currency)['free'])
-
-        if child_account_balance_free == 0 or currency == '':
-            return 0
-
-        main_account_balance = main_account_client.get_asset_balance(asset=currency)
-
-        if main_account_order['side'] == config.SELL:
-            # Calculate the percentage of created order in main account relatively to the main account balance.
-            main_account_locked_on_trade = main_account_order['original_qty']
-            main_order_percentage = (float(main_account_locked_on_trade) / (
-                        float(main_account_balance['free']) + float(main_account_locked_on_trade))) * 100
-            # Sum which is calculated to spend for child account.
-            calculated_qty_to_sell = child_account_balance_free * (main_order_percentage / 100)
-
-            return round(calculated_qty_to_sell - config.SAFE_ROUND_DOWN_HACK, config.PRECISION)
-
-        if main_account_order['side'] == config.BUY:
-            # Calculate the percentage of created order in main account relatively to the main account balance.
-            main_account_locked_on_trade = main_account_order['cummulative_quote_qty']
-            main_order_percentage = (float(main_account_locked_on_trade) / (float(main_account_balance['free']) + float(main_account_locked_on_trade))) * 100
-            # Sum which is calculated to spend for child account.
-            child_account_order_resource = child_account_balance_free * (main_order_percentage / 100)
-            calculated_qty_to_buy = child_account_order_resource / (main_account_order['cummulative_quote_qty'] / main_account_order['original_qty'])
-
-            return round(calculated_qty_to_buy - config.SAFE_ROUND_DOWN_HACK, config.PRECISION)
-
-        return 0
 
     def _get_account_balance(self, client, currency):
         account_assets_info = client.get_margin_account()

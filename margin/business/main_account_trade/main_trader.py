@@ -11,9 +11,9 @@ class MainTrader:
         self.client = Client(config.main_account_api_key, config.main_account_api_secret)
 
     def sync_main_account_trades(self):
-        self._sync_active_margin_trades()
-        # self._sync_market_margin_trades()
-        self._sync_closed_margin_trades()
+        # self._sync_active_margin_trades()
+        self._sync_market_margin_trades()
+        # self._sync_closed_margin_trades()
 
     def _sync_active_margin_trades(self):
         for allowed_symbol in config.ALLOWED_SYMBOLS:
@@ -32,7 +32,6 @@ class MainTrader:
 
     def _sync_market_margin_trades(self):
         for allowed_symbol in config.ALLOWED_SYMBOLS:
-            print(allowed_symbol)
             main_acc_orders = self.client.get_all_margin_orders(symbol=allowed_symbol, limit=10)
             for order in main_acc_orders:
                 if order['type'] == config.MARKET_TYPE:
@@ -40,6 +39,8 @@ class MainTrader:
 
                     if len(records) > 0:
                         continue
+
+                    order = self._decorate_active_trade(order)
 
                     self.main_account_entity_manager.insert_new_trade(order)
 
@@ -62,6 +63,22 @@ class MainTrader:
     def _decorate_active_trade(self, active_trade):
         currency = self._get_currency_from_main_order(active_trade)
         active_trades_with_borrowing = self.main_account_repository.get_main_account_active_trade_with_borrowing()
+        main_account_balance = self._get_main_account_margin_wallet(currency)
+        borrowed = float(main_account_balance['borrowed'])
+        active_trade['borrowed'] = 0
+
+        for active_trade_with_borrowing in active_trades_with_borrowing:
+            borrowed = borrowed - float(active_trade_with_borrowing['borrowed'])
+
+        if float(main_account_balance['netAsset']) < float(main_account_balance['locked']):
+            borrowed = borrowed - float(main_account_balance['free'])
+            active_trade['borrowed'] = borrowed
+
+        return active_trade
+
+    def _decorate_executed_market_trade(self, active_trade):
+        currency = self._get_currency_from_main_order(active_trade)
+        active_trades_with_borrowing = self.main_account_repository.get_main_account_market_trade_with_borrowing()
         main_account_balance = self._get_main_account_margin_wallet(currency)
         borrowed = float(main_account_balance['borrowed'])
         active_trade['borrowed'] = 0
