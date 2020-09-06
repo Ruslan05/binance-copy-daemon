@@ -11,9 +11,9 @@ class MainTrader:
         self.client = Client(config.main_account_api_key, config.main_account_api_secret)
 
     def sync_main_account_trades(self):
-        # self._sync_active_margin_trades()
+        self._sync_active_margin_trades()
         self._sync_market_margin_trades()
-        # self._sync_closed_margin_trades()
+        self._sync_closed_margin_trades()
 
     def _sync_active_margin_trades(self):
         for allowed_symbol in config.ALLOWED_SYMBOLS:

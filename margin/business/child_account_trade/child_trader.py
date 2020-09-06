@@ -108,7 +108,7 @@ class ChildTrader:
     def _place_stop_loss_limit_order(self, main_account_order):
         calculated_qty = self._get_calculated_limit_order_data_based_on_deposit(main_account_order)['calculated_qty']
 
-        order = self.child_account_client.create_order(
+        order = self.child_account_client.create_margin_order(
             symbol=main_account_order['symbol'],
             side=main_account_order['side'],
             timeInForce=main_account_order['time_in_force'],
@@ -304,14 +304,21 @@ class ChildTrader:
             self.child_account_client = Client(api_key, api_secret)
             currency = self._get_currency_from_main_order(child_account_order)
 
-            self.child_account_client.cancel_margin_order(
-                symbol=child_account_order['symbol'],
-                orderId=child_account_order['order_id']
-            )
-            if child_account_order['borrowed'] > 0:
-                self.child_account_client.repay_margin_loan(asset=currency, amount=child_account_order['borrowed'])
+            try:
+                self.child_account_client.cancel_margin_order(
+                    symbol=child_account_order['symbol'],
+                    orderId=child_account_order['order_id']
+                )
 
-            self.child_account_entity_manager.close_child_trade_in_db(child_account_order, child_account_order['account_name'])
+                if child_account_order['borrowed'] is not None and child_account_order['borrowed'] > 0:
+                    self.child_account_client.repay_margin_loan(asset=currency, amount=child_account_order['borrowed'])
+            except Exception as e:
+                f = open("exception.txt", "a")
+                f.write('Child cancel order exception: ' + str(e) + "\n")
+                f.write(json.dumps(child_account_order) + "\n")
+                f.close()
+            finally:
+                self.child_account_entity_manager.close_child_trade_in_db(child_account_order, child_account_order['account_name'])
 
     def _sync_loans(self, order):
         opposite_side_currency = self._get_opposite_currency_from_main_order(order)

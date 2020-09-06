@@ -201,9 +201,15 @@ class ChildTrader:
             api_secret = config.child_accounts[child_account_order['account_name']]['api_secret']
 
             client = Client(api_key, api_secret)
-            client.cancel_order(
-                symbol=child_account_order['symbol'],
-                orderId=child_account_order['order_id']
-            )
-
-            self.child_account_entity_manager.close_child_trade_in_db(child_account_order, child_account_order['account_name'])
+            try:
+                client.cancel_order(
+                    symbol=child_account_order['symbol'],
+                    orderId=child_account_order['order_id']
+                )
+            except Exception as e:
+                f = open("exception.txt", "a")
+                f.write('Child cancel order exception: ' + str(e) + "\n")
+                f.write(json.dumps(child_account_order) + "\n")
+                f.close()
+            finally:
+                self.child_account_entity_manager.close_child_trade_in_db(child_account_order, child_account_order['account_name'])
