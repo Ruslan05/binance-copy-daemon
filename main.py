@@ -1,5 +1,6 @@
 import mysql.connector as mysql
 import config
+import time
 
 from binance.websockets import BinanceSocketManager
 from binance.client import Client
@@ -41,13 +42,14 @@ class Main:
         wallet_synchronizer = WalletSynchronizer()
 
         while True:
-            # spot_main_account.sync_main_account_trades()
-            # spot_child_account.sync_child_accounts_trades()
+            spot_main_account.sync_main_account_trades()
+            spot_child_account.sync_child_accounts_trades()
 
             margin_main_account.sync_main_account_trades()
             margin_child_account.sync_child_accounts_trades()
 
-            # wallet_synchronizer.sync_wallets()
+            wallet_synchronizer.sync_wallets()
 
+            time.sleep(10)
 main = Main()
 main.run()
