@@ -2,9 +2,6 @@ import mysql.connector as mysql
 import config
 import time
 
-from binance.websockets import BinanceSocketManager
-from binance.client import Client
-
 from spot.persistence.child_account_trade.child_account_repository import ChildAccountRepository as SpotChildAccountRepository
 from spot.persistence.child_account_trade.child_account_entity_manager import ChildAccountEntityManager as SpotChildAccountEntityManager
 from spot.business.child_account_trade.child_trader import ChildTrader as SpotChildTrader
@@ -50,6 +47,6 @@ class Main:
 
             wallet_synchronizer.sync_wallets()
 
-            time.sleep(10)
+            time.sleep(1)
 main = Main()
 main.run()
