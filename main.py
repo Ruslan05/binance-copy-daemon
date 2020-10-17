@@ -1,24 +1,25 @@
 import mysql.connector as mysql
-import config
+from src import config
 import time
 
-from spot.persistence.child_account_trade.child_account_repository import ChildAccountRepository as SpotChildAccountRepository
-from spot.persistence.child_account_trade.child_account_entity_manager import ChildAccountEntityManager as SpotChildAccountEntityManager
-from spot.business.child_account_trade.child_trader import ChildTrader as SpotChildTrader
+from src.spot.persistence.child_account_trade.child_account_repository import ChildAccountRepository as SpotChildAccountRepository
+from src.spot.persistence.child_account_trade.child_account_entity_manager import ChildAccountEntityManager as SpotChildAccountEntityManager
+from src.spot.business.child_account_trade.child_trader import ChildTrader as SpotChildTrader
 
-from spot.persistence.main_account_trade.main_account_repository import MainAccountRepository as SpotMainAccountRepository
-from spot.persistence.main_account_trade.main_account_entity_manager import MainAccountEntityManager as SpotMainAccountEntityManager
-from spot.business.main_account_trade.main_trader import MainTrader as SpotMainTrader
+from src.spot.persistence.main_account_trade.main_account_repository import MainAccountRepository as SpotMainAccountRepository
+from src.spot.persistence.main_account_trade.main_account_entity_manager import MainAccountEntityManager as SpotMainAccountEntityManager
+from src.spot.business.main_account_trade.main_trader import MainTrader as SpotMainTrader
 
-from margin.persistence.child_account_trade.child_account_repository import ChildAccountRepository as MarginChildAccountRepository
-from margin.persistence.child_account_trade.child_account_entity_manager import ChildAccountEntityManager as MarginChildAccountEntityManager
-from margin.business.child_account_trade.child_trader import ChildTrader as MarginChildTrader
+from src.margin.persistence.child_account_trade.child_account_repository import ChildAccountRepository as MarginChildAccountRepository
+from src.margin.persistence.child_account_trade.child_account_entity_manager import ChildAccountEntityManager as MarginChildAccountEntityManager
+from src.margin.business.child_account_trade.child_trader import ChildTrader as MarginChildTrader
 
-from margin.persistence.main_account_trade.main_account_repository import MainAccountRepository as MarginMainAccountRepository
-from margin.persistence.main_account_trade.main_account_entity_manager import MainAccountEntityManager as MarginMainAccountEntityManager
-from margin.business.main_account_trade.main_trader import MainTrader as MarginMainTrader
+from src.margin.persistence.main_account_trade.main_account_repository import MainAccountRepository as MarginMainAccountRepository
+from src.margin.persistence.main_account_trade.main_account_entity_manager import MainAccountEntityManager as MarginMainAccountEntityManager
+from src.margin.business.main_account_trade.main_trader import MainTrader as MarginMainTrader
 
-from wallet.business.wallet_synchronizer import WalletSynchronizer
+from src.wallet.business.wallet_synchronizer import WalletSynchronizer
+
 
 class Main:
     def run(self):
