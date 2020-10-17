@@ -1,3 +1,4 @@
 from tests.spot.business.child_account_trade.child_trader_test import ChildTraderTest
 
-ChildTraderTest.test_get_calculated_limit_order_qty_based_on_deposit()
+child_trader_test = ChildTraderTest()
+

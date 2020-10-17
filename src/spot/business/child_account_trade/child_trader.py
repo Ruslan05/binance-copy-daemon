@@ -11,6 +11,8 @@ class ChildTrader:
     def __init__(self, child_account_repository, child_account_entity_manager):
         self.child_account_repository = child_account_repository
         self.child_account_entity_manager = child_account_entity_manager
+        self.main_account_client = Client(config.main_account_api_key, config.main_account_api_secret)
+
 
     def sync_child_accounts_trades(self):
         self._sync_active_trades()
@@ -114,14 +116,13 @@ class ChildTrader:
 
     # TODO: discuss precision
     def _get_calculated_limit_order_qty_based_on_deposit(self, client, main_account_order):
-        main_account_client = Client(config.main_account_api_key, config.main_account_api_secret)
         currency = self._get_currency_from_main_order(main_account_order)
         child_account_balance_free = float(client.get_asset_balance(asset=currency)['free'])
 
         if child_account_balance_free == 0 or currency == '':
             return 0
 
-        main_account_balance = main_account_client.get_asset_balance(asset=currency)
+        main_account_balance = self.main_account_client.get_asset_balance(asset=currency)
 
         if main_account_order['side'] == config.SELL:
             # Calculate the percentage of created order in main account relatively to the main account balance.
@@ -147,14 +148,13 @@ class ChildTrader:
 
     # TODO: discuss precision
     def _get_calculated_market_order_qty_based_on_deposit(self, client, main_account_order):
-        main_account_client = Client(config.main_account_api_key, config.main_account_api_secret)
         currency = self._get_currency_from_main_order(main_account_order)
         child_account_balance_free = float(client.get_asset_balance(asset=currency)['free'])
 
         if child_account_balance_free == 0 or currency == '':
             return 0
 
-        main_account_balance = main_account_client.get_asset_balance(asset=currency)
+        main_account_balance = self.main_account_client.get_asset_balance(asset=currency)
 
         if main_account_order['side'] == config.SELL:
             # Calculate the percentage of created order in main account relatively to the main account balance.
